@@ -124,16 +124,154 @@ def fini(cid):
     conn.close(); return redirect('/admin')
 
 @app.route('/bloque/<int:aid>')
-def bloque(aid):
-    conn = get_db(); a = conn.execute("SELECT * FROM artisans WHERE id=?",(aid,)).fetchone(); conn.close()
-    return BASE_HEAD + f"<div style='background:#E30613;color:white;padding:16px;text-align:center'><h2>COMPTE BLOQUE - {a['ville']}</h2></div><div class=card style='text-align:center;border:2px solid #E30613'><h3>{a['nom']}</h3><p>Dette: {a['dette']} FCFA</p></div><div class=card><div style='background:#E6F6FF;padding:12px;border-radius:10px;border-left:4px solid #1DC4FF'><b>Wave</b><br>{a['dette']}F au <b>{WAVE_NUM}</b></div><div style='background:#FFF3E6;padding:12px;border-radius:10px;border-left:4px solid #FF7900;margin-top:8px'><b>OM</b><br>{a['dette']}F au <b>{OM_NUM}</b></div><a href='/payer/{a['id']}/wave' class='btn btn-wave'>J AI PAYE WAVE</a><a href='/payer/{a['id']}/om' class='btn btn-om'>J AI PAYE OM</a></div>"
+def bloque(aid):from flask import Flask, request, redirect, url_for, render_template_string
+import sqlite3
+from datetime import datetime, timedelta
 
-@app.route('/payer/<int:aid>/<type_pay>')
-def payer(aid, type_pay):
-    conn = get_db(); a = conn.execute("SELECT * FROM artisans WHERE id=?",(aid,)).fetchone()
-    dette = a['dette'] if a else 0
-    conn.execute("UPDATE artisans SET dette=0, last_payment=? WHERE id=?", (datetime.now().strftime('%Y-%m-%d'), aid)); conn.commit(); conn.close()
-    return BASE_HEAD + f"<div style='padding:40px 20px;text-align:center;background:white;min-height:100vh'><div style='font-size:80px'>OK</div><h1 style='color:#008751'>PAIEMENT RECU !</h1><p>{a['nom']} de {a['ville']} a paye {dette}F via {type_pay.upper()}<br>Wave {WAVE_NUM} / OM {OM_NUM}</p><div class=card style='background:#D4EDDA'>SMS: Merci {a['nom']} ! Paiement {dette}F recu. Compte DEBLOQUE pour toute la CI. Prochain 1000F fin du mois.</div><a href='/artisans' class='btn btn-green'>RETOUR DEBLOQUE</a></div>"
+app = Flask(__name__)
+DB = 'batiartisan_v2.db'
+WAVE_NUM = "0596003270"
+OM_NUM = "0709996974"
+
+def get_db():
+    conn = sqlite3.connect(DB)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def init_db():
+    conn = get_db()
+    conn.execute("""CREATE TABLE IF NOT EXISTS artisans (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nom TEXT, metier TEXT, ville TEXT, tel TEXT, 
+        description TEXT, photo TEXT, date TEXT)""")
+    conn.execute("""CREATE TABLE IF NOT EXISTS clients (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nom TEXT, tel TEXT, besoin TEXT)""")
+    conn.execute("""CREATE TABLE IF NOT EXISTS commandes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        artisan_id INTEGER, client_nom TEXT, status TEXT)""")
+    conn.commit()
+    conn.close()
+
+init_db()
+
+# --- PAGE PRINCIPALE BELLE ---
+HTML_HOME = """
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BabiArtisan CI - Artisans de Côte d'Ivoire</title>
+<meta property="og:title" content="BabiArtisan CI - Trouve un artisan en 2 min 🇨🇮">
+<meta property="og:description" content="Les meilleurs artisans de CI - Menuiserie, Electricité, Plomberie">
+<meta property="og:image" content="https://babiartisan-ci.onrender.com/static/og-image.jpg">
+<meta property="og:url" content="https://babiartisan-ci.onrender.com">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif}
+body{background:#f5f7f5}
+.header{background:linear-gradient(135deg,#00a859 0%,#ff8c00 100%);color:white;padding:25px 20px 45px;text-align:center;border-radius:0 0 28px 28px}
+.logo{font-size:26px;font-weight:900;letter-spacing:1px}
+.sub{margin-top:6px;opacity:.95;font-size:15px;line-height:1.4}
+.container{max-width:500px;margin:-25px auto 0;padding:0 16px}
+.card{background:white;border-radius:20px;padding:20px;box-shadow:0 10px 30px rgba(0,0,0,.08);margin-bottom:16px}
+.btn{width:100%;padding:16px;border-radius:14px;border:none;font-weight:700;font-size:16px;margin:8px 0;cursor:pointer;display:block;text-align:center;text-decoration:none}
+.btn-green{background:#00a859;color:white}
+.btn-orange{background:#ff8c00;color:white}
+.btn-outline{background:white;border:2px solid #00a859;color:#00a859}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.mini{background:#f8f9f8;padding:14px;border-radius:12px;text-align:center;font-weight:600;font-size:13px}
+.artisan{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid #eee}
+.artisan:last-child{border:none}
+.avatar{width:48px;height:48px;border-radius:50%;background:#00a859;color:white;display:flex;align-items:center;justify-content:center;font-weight:800}
+.badge{background:#e8f5e9;color:#00a859;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:700}
+</style>
+</head>
+<body>
+<div class="header">
+<div class="logo">BABIARTISAN CI 🇨🇮</div>
+<div class="sub">Les meilleurs artisans de Côte d'Ivoire<br>Trouve un artisan en 2 min partout en CI</div>
+</div>
+<div class="container">
+<div class="card">
+<a href="/artisans" class="btn btn-green">🔍 VOIR LES ARTISANS DE CI</a>
+<a href="/devenir-artisan" class="btn btn-orange">➕ DEVENIR ARTISAN (gratuit)</a>
+<a href="/admin" class="btn btn-outline">👤 ESPACE ADMIN</a>
+<div class="grid">
+<div class="mini">🔨 Menuiserie</div>
+<div class="mini">💡 Électricité</div>
+<div class="mini">🚿 Plomberie</div>
+<div class="mini">🎨 Peinture</div>
+</div>
+</div>
+
+<div class="card">
+<h3 style="margin-bottom:10px">⭐ Artisans disponibles</h3>
+{% for a in artisans %}
+<div class="artisan">
+<div class="avatar">{{ a['nom'][0] }}</div>
+<div style="flex:1">
+<div style="font-weight:700">{{ a['nom'] }} <span class="badge">{{ a['metier'] }}</span></div>
+<div style="font-size:13px;color:#666">{{ a['ville'] }} • {{ a['tel'] }}</div>
+<div style="font-size:12px;color:#888;margin-top:2px">{{ a['description'] }}</div>
+</div>
+</div>
+{% else %}
+<p style="color:#888;text-align:center;padding:10px">Aucun artisan pour l'instant. Sois le premier !</p>
+{% endfor %}
+</div>
+
+<div style="text-align:center;color:#999;font-size:11px;padding:20px">
+Marketplace 100% ivoirien • Wave: {{ wave }} • OM: {{ om }}<br>
+Rapide • Fiable • Partout en Côte d'Ivoire
+</div>
+</div>
+</body>
+</html>
+"""
+
+@app.route('/')
+def home():
+    conn = get_db()
+    arts = conn.execute("SELECT * FROM artisans ORDER BY id DESC LIMIT 20").fetchall()
+    conn.close()
+    return render_template_string(HTML_HOME, artisans=arts, wave=WAVE_NUM, om=OM_NUM)
+
+@app.route('/artisans')
+def artisans():
+    return home()
+
+@app.route('/devenir-artisan', methods=['GET','POST'])
+def devenir():
+    if request.method == 'POST':
+        conn = get_db()
+        conn.execute("INSERT INTO artisans (nom,metier,ville,tel,description,date) VALUES (?,?,?,?,?,?)",
+                     (request.form['nom'],request.form['metier'],request.form['ville'],request.form['tel'],request.form['desc'],datetime.now().strftime("%d/%m/%Y")))
+        conn.commit(); conn.close()
+        return redirect('/')
+    return render_template_string("""
+    <html><head><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>body{font-family:sans-serif;padding:20px;background:#f5f7f5}input,select,textarea{width:100%;padding:14px;margin:8px 0;border-radius:10px;border:1px solid #ddd}
+    .btn{background:#00a859;color:white;padding:16px;border:none;border-radius:14px;width:100%;font-weight:700}</style></head>
+    <body><h2>Devenir Artisan 🇨🇮</h2>
+    <form method="post">
+    <input name="nom" placeholder="Ton nom complet" required>
+    <select name="metier"><option>Menuiserie</option><option>Electricité</option><option>Plomberie</option><option>Peinture</option><option>Maçonnerie</option></select>
+    <input name="ville" placeholder="Ville (Abidjan, Bouaké...)" required>
+    <input name="tel" placeholder="Numéro WhatsApp" required>
+    <textarea name="desc" placeholder="Décris ton travail..."></textarea>
+    <button class="btn">✅ S'INSCRIRE GRATUITEMENT</button>
+    </form><br><a href="/">← Retour</a></body></html>
+    """)
+
+@app.route('/admin')
+def admin():
+    conn = get_db()
+    c = conn.execute("SELECT COUNT(*) as n FROM artisans").fetchone()
+    conn.close()
+    return f"<h2>Admin BabiArtisan</h2><p>{c['n']} artisans inscrits</p><p>Wave: {WAVE_NUM}<br>OM: {OM_NUM}</p><a href='/'>Retour</a>"
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(debug=True)
+    conn = get_db(); a = conn.execute("SELECT * FROM artisans WHERE id=?",(aid,)).fetchone(); conn.close()
+    return BASE_HEAD + f"<div style='background:#E30613;color:white;padding:16px;text-align:center'><h2>COMPTE BLOQUE - {a['ville']}</h2></div><div class=card style='text-align:center;border:2px solid #E30613'><h3>{a['nom']}</h3><p>Dette: {a['dette']} FCFA</p></div><div class=card><div style='background:#E6F6FF;padding:12px;border-radius:10px;border-left:4px solid #1DC4FF'><b>Wave</b><br>{a['dette']}F 
