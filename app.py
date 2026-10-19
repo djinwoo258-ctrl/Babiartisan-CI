@@ -1,14 +1,13 @@
 import os
 import sqlite3
 from datetime import datetime, timedelta
-from flask import Flask, request, redirect, session, url_for
+from flask import Flask, request, redirect, session, url_for, Response, jsonify
 
 app = Flask(__name__)
 
 # --- CODE ANTI-BUG TÉLÉPHONE PRO ---
 def clean_env(name, default):
     raw = os.environ.get(name, default)
-    # enlève tout ce que le téléphone ajoute en colonne
     return raw.replace("\n","").replace("\r","").replace(" ","").replace("\t","").strip()
 
 ADMIN_PASSWORD = clean_env("ADMIN_PASSWORD", "Djinwoo258")
@@ -16,6 +15,9 @@ SECRET_KEY = clean_env("SECRET_KEY", "babi-artisan-ci-2026-pro")
 app.secret_key = SECRET_KEY
 WAVE = "0596003270"
 DB = "babiartisan_v11.db"
+
+# --- GOOGLE + PWA POUR CHROME ---
+GOOGLE_CODE = "R8QG7u_Wj5KU4chom1VGfq-nu8qG0WG_zLcOMewlEnw"
 # --- FIN CODE ANTI-BUG ---
 
 def get_db():
@@ -49,37 +51,53 @@ def check_abo():
     except: pass
     c.close()
 
-# DESIGN PRO ATTRAYANT
-CSS = """
+# DESIGN PRO ATTRAYANT + PWA + GOOGLE
+CSS = f"""
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="google-site-verification" content="{GOOGLE_CODE}" />
+<meta name="theme-color" content="#00d26a">
+<meta name="description" content="artisan CI - BabiArtisan-CI N°1 pour trouver un artisan en Côte d'Ivoire. Maçon, mécano moto, auto, vélo, peintre, vigile, nounou à Abidjan et intérieur.">
+<meta name="keywords" content="artisan CI, artisan Abidjan, artisan Côte d'Ivoire, BabiArtisan">
+<meta property="og:title" content="artisan CI | BabiArtisan-CI">
+<meta property="og:description" content="Trouve un artisan qualifié en Côte d'Ivoire en 30 secondes">
+<meta property="og:image" content="https://babiartisan-ci.onrender.com/icon.png">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon.png">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@700;900&display=swap" rel="stylesheet">
 <style>
-*{margin:0;padding:0;box-sizing:border-box;font-family:'Inter',system-ui}
-body{background:#f8faf8;color:#111}
-.hero-pro{position:relative;width:100%;min-height:520px;background:linear-gradient(135deg,#0a0a0a 0%,#1a3a1a 100%);overflow:hidden;display:flex;align-items:center;padding:24px}
-.hero-pro img.bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.35}
-.hero-pro .content{position:relative;z-index:2;max-width:800px;margin:0 auto;width:100%;color:#fff}
-.badge-top{display:inline-block;background:#00ff88;color:#000;padding:6px 14px;border-radius:99px;font-weight:900;font-size:12px;margin-bottom:14px}
-.hero-pro h1{font-size:42px;font-weight:900;line-height:.95;letter-spacing:-2px;margin-bottom:12px}
-.hero-pro h1 span{color:#00ff88}
-.hero-pro p.sub{font-size:17px;opacity:.9;line-height:1.4;margin-bottom:20px}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.btn-pro{display:block;padding:18px;border-radius:16px;text-align:center;font-weight:900;text-decoration:none;transition:.15s;font-size:15px}
-.btn-pro:active{transform:scale(.96)}
-.g{background:linear-gradient(135deg,#00d26a,#00ff88);color:#000;box-shadow:0 10px 30px rgba(0,255,136,.3)}
-.o{background:#fff;color:#111}
-.b{background:#111;color:#fff}
-.wrap{max-width:800px;margin:0 auto;padding:0 14px 100px}
-.card{background:#fff;border-radius:24px;padding:20px;margin:16px 0;box-shadow:0 10px 40px rgba(0,0,0,.06);border:1px solid #f0f0f0}
-.stat{display:flex;justify-content:space-around;text-align:center;padding:14px 0}
-.stat b{font-size:26px;display:block}
-input,select,textarea{width:100%;padding:16px;border-radius:14px;border:1.5px solid #e5e7eb;margin:7px 0;font-size:15px}
-.pill{padding:8px 14px;background:#f3f4f6;border-radius:99px;font-size:13px;text-decoration:none;color:#111;font-weight:700;display:inline-block;margin:4px}
-.badge{padding:6px 12px;border-radius:99px;font-size:11px;font-weight:800}
-.ok{background:#dcfce7;color:#166534}.ko{background:#fee2e2;color:#991b1b}
-.why{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:16px 0}
-.why div{background:#fff;padding:14px;border-radius:18px;text-align:center;border:1px solid #eee}
+*{{margin:0;padding:0;box-sizing:border-box;font-family:'Inter',system-ui}}
+body{{background:#f8faf8;color:#111}}
+.hero-pro{{position:relative;width:100%;min-height:520px;background:linear-gradient(135deg,#0a0a0a 0%,#1a3a1a 100%);overflow:hidden;display:flex;align-items:center;padding:24px}}
+.hero-pro img.bg{{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.35}}
+.hero-pro .content{{position:relative;z-index:2;max-width:800px;margin:0 auto;width:100%;color:#fff}}
+.badge-top{{display:inline-block;background:#00ff88;color:#000;padding:6px 14px;border-radius:99px;font-weight:900;font-size:12px;margin-bottom:14px}}
+.hero-pro h1{{font-size:42px;font-weight:900;line-height:.95;letter-spacing:-2px;margin-bottom:12px}}
+.hero-pro h1 span{{color:#00ff88}}
+.hero-pro p.sub{{font-size:17px;opacity:.9;line-height:1.4;margin-bottom:20px}}
+.grid2{{display:grid;grid-template-columns:1fr 1fr;gap:12px}}
+.btn-pro{{display:block;padding:18px;border-radius:16px;text-align:center;font-weight:900;text-decoration:none;transition:.15s;font-size:15px}}
+.btn-pro:active{{transform:scale(.96)}}
+.g{{background:linear-gradient(135deg,#00d26a,#00ff88);color:#000;box-shadow:0 10px 30px rgba(0,255,136,.3)}}
+.o{{background:#fff;color:#111}}
+.b{{background:#111;color:#fff}}
+.wrap{{max-width:800px;margin:0 auto;padding:0 14px 100px}}
+.card{{background:#fff;border-radius:24px;padding:20px;margin:16px 0;box-shadow:0 10px 40px rgba(0,0,0,.06);border:1px solid #f0f0f0}}
+.stat{{display:flex;justify-content:space-around;text-align:center;padding:14px 0}}
+.stat b{{font-size:26px;display:block}}
+input,select,textarea{{width:100%;padding:16px;border-radius:14px;border:1.5px solid #e5e7eb;margin:7px 0;font-size:15px}}
+.pill{{padding:8px 14px;background:#f3f4f6;border-radius:99px;font-size:13px;text-decoration:none;color:#111;font-weight:700;display:inline-block;margin:4px}}
+.badge{{padding:6px 12px;border-radius:99px;font-size:11px;font-weight:800}}
+.ok{{background:#dcfce7;color:#166534}}.ko{{background:#fee2e2;color:#991b1b}}
+.why{{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:16px 0}}
+.why div{{background:#fff;padding:14px;border-radius:18px;text-align:center;border:1px solid #eee}}
 </style>
+<script>
+if ('serviceWorker' in navigator) {{
+  window.addEventListener('load', function() {{
+    navigator.serviceWorker.register('/sw.js');
+  }});
+}}
+</script>
 """
 
 def layout(content, is_admin=False):
@@ -110,6 +128,53 @@ def layout(content, is_admin=False):
     end = "</div>" if not is_admin else ""
     return f"<html><head>{CSS}</head><body>{nav}{content}{end}</body></html>"
 
+# --- ROUTES CHROME / GOOGLE / PWA (NOUVEAU) ---
+@app.route('/google-site-verification.html')
+@app.route(f'/{GOOGLE_CODE}.html')
+def google_file():
+    return f"google-site-verification: google-site-verification={GOOGLE_CODE}"
+
+@app.route('/robots.txt')
+def robots():
+    return Response("User-agent: *\nAllow: /\nSitemap: https://babiartisan-ci.onrender.com/sitemap.xml", mimetype="text/plain")
+
+@app.route('/sitemap.xml')
+def sitemap():
+    xml = """<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://babiartisan-ci.onrender.com/</loc><priority>1.0</priority></url>
+  <url><loc>https://babiartisan-ci.onrender.com/devenir-artisan</loc><priority>0.8</priority></url>
+</urlset>"""
+    return Response(xml, mimetype="application/xml")
+
+@app.route('/manifest.json')
+def manifest():
+    return jsonify({
+        "name": "artisan CI - BabiArtisan-CI",
+        "short_name": "artisan CI",
+        "description": "Trouve un artisan en Côte d'Ivoire",
+        "start_url": "/",
+        "display": "standalone",
+        "background_color": "#f8faf8",
+        "theme_color": "#00d26a",
+        "icons": [{"src": "/icon.png", "sizes": "512x512", "type": "image/png"}]
+    })
+
+@app.route('/sw.js')
+def sw():
+    js = """
+    self.addEventListener('install', e => self.skipWaiting());
+    self.addEventListener('activate', e => self.clients.claim());
+    self.addEventListener('fetch', e => e.respondWith(fetch(e.request).catch(()=>caches.match(e.request))));
+    """
+    return Response(js, mimetype="application/javascript")
+
+@app.route('/icon.png')
+def icon():
+    # Redirige vers une icône simple, tu pourras mettre ton logo plus tard
+    return redirect("https://cdn-icons-png.flaticon.com/512/1995/1995515.png")
+
+# --- TON CODE ORIGINAL INTACT ---
 @app.route('/')
 def home():
     ville=request.args.get('ville','').strip()
