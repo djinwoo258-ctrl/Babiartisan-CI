@@ -356,58 +356,6 @@ def supprimer(id):
 @app.route('/admin/logout')
 def logout():
     session.pop('admin_logged',None); return redirect(url_for('admin'))
-# Remplace ta route /contact par celle-ci
-@app.route('/contact/<int:id>')
-def contact(id):
-    c=get_db(); a=c.execute("SELECT * FROM artisans WHERE id=?",(id,)).fetchone()
-    if a:
-        c.execute("UPDATE artisans SET vues=vues+1, status='A_DECLARER' WHERE id=?",(id,))
-        c.execute("INSERT INTO contacts(artisan_id,artisan_nom,date) VALUES(?,?,?)",(id,a['nom'],datetime.now().strftime("%d/%m/%Y %H:%M")))
-        c.execute("INSERT INTO notifications(message,date) VALUES(?,?)",(f"👀 Client a contacté {a['nom']} ({a['metier']}) à {a['ville']} -> BLOQUÉ en attente de déclaration prix", datetime.now().strftime("%d/%m/%Y %H:%M")))
-        c.commit()
-    c.close()
-    return redirect(f"https://wa.me/225{a['tel']}?text=Salut {a['nom']} 👋 via BabiArtisan CI pour {a['metier']} à {a['ville']}. Une fois le prix conclu, merci de le déclarer sur babiartisan-ci.onrender.com/declarer-marche pour rester visible.")
 
-# Remplace ta route /declarer-marche par celle-ci V14.1 BOSS
-@app.route('/declarer-marche', methods=['GET','POST'])
-def declarer_marche():
-    AVERTISSEMENT_HTML = "<div style='background:#fee2e2;border:2px solid #ef4444;color:#991b1b;padding:14px;border-radius:14px;text-align:center;font-weight:900;margin-bottom:14px'>⚠️ AVERTISSEMENT : Pour toute omission du prix ou fausse déclaration, vous êtes banni définitivement de notre application BabiArtisan-CI.</div>"
-    if request.method=='POST':
-        artisan_id = clean_input(request.form.get('artisan_id',''), 10)
-        montant = int(request.form.get('montant','0'))
-        client_tel = clean_input(request.form.get('client_tel',''), 20)
-        if montant < 1000: return layout(f"<div class='wrap'><div class='card'>{AVERTISSEMENT_HTML}<h3>⛔ Montant minimum 1000F</h3><a class='btn-pro b' href='/declarer-marche'>Retour</a></div></div>")
-        commission = int(montant * 0.01)
-        c=get_db()
-        art=c.execute("SELECT * FROM artisans WHERE id=?",(artisan_id,)).fetchone()
-        if art:
-            c.execute("UPDATE artisans SET dette=dette+?, status='DISPO', last_pay=? WHERE id=?",(commission, datetime.now().strftime("%d/%m/%Y"), artisan_id))
-            c.execute("INSERT INTO notifications(message,date) VALUES(?,?)",(f"💰💰 CONTRAT CONCLU ! {art['nom']} a déclaré {montant}F avec client {client_tel} -> Commission {commission}F à encaisser Wave {WAVE}", datetime.now().strftime("%d/%m/%Y %H:%M")))
-            c.commit()
-            msg = f"Parfait ! Tu as déclaré {montant}F. Commission {commission}F (1%) Wave {WAVE}. Tu es à nouveau visible dans toute la CI !"
-            c.close()
-            return layout(f"<div class='wrap'><div class='card' style='text-align:center'>{AVERTISSEMENT_HTML}<h1>✅ Merci pour ton honnêteté !</h1><p>{msg}</p><a class='btn-pro g' href='/'>RETOUR ACCUEIL VISIBLE</a></div></div>")
-        c.close()
-        return layout(f"<div class='wrap'><div class='card'>{AVERTISSEMENT_HTML}<h3>ID artisan introuvable</h3><a class='btn-pro b' href='/declarer-marche'>Retour</a></div></div>")
-    
-    return layout(f"""
-<div class='wrap'><div class='card'>
-{AVERTISSEMENT_HTML}
-<h2>💰 Déclaration OBLIGATOIRE du marché</h2>
-<p style='font-size:13px;color:#555'>Tu as été contacté par un client. Pour rester visible et continuer à recevoir des clients, tu DOIS déclarer le prix conclu. Sans déclaration, ton profil reste BLOQUÉ et invisible.</p>
-<form method='post'>
-<input name='artisan_id' placeholder='Ton ID artisan (ex: 15)' required>
-<input name='montant' type='number' placeholder='Montant réel conclu (ex: 50000)' required>
-<input name='client_tel' placeholder='Numéro du client' required>
-<button class='btn-pro g'>💸 DÉCLARER LE VRAI PRIX ET SE DÉBLOQUER</button>
-</form>
-<p style='font-size:11px;color:#991b1b;font-weight:800;margin-top:12px'>🚨 Toute fausse déclaration = Bannissement définitif. On vérifie avec le client.</p>
-<a class='btn-pro b' href='/'>← Retour</a></div></div>
-""")
-
-# DANS TON HOME, REMPLACE LA LIGNE: if ville: ...
-# PAR CECI POUR CACHER LES BLOQUÉS A_DECLARER:
-# Après c=get_db() ajoute:
-# arts=[a for a in arts if a['status']=='DISPO']
 if __name__=='__main__':
     app.run(host='0.0.0.0',port=int(os.environ.get("PORT",10000)))
